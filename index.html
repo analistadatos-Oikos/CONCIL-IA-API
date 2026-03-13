@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONCIL-IA · Visor Jerárquico</title>
+    <title>CONCIL-IA · Visor de Datos</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        /* Mismos estilos elegantes de antes */
         * {
             margin: 0;
             padding: 0;
@@ -27,7 +28,6 @@
             margin: 0 auto;
         }
 
-        /* Panel Izquierdo */
         .panel-izq {
             flex: 0 0 320px;
             background: rgba(255, 255, 255, 0.98);
@@ -39,7 +39,6 @@
             overflow-y: auto;
         }
 
-        /* Panel Derecho */
         .panel-der {
             flex: 1;
             background: rgba(255, 255, 255, 0.98);
@@ -358,7 +357,7 @@
                     <i class="fas fa-bolt"></i>
                     CONCIL-IA
                 </h1>
-                <span class="badge">v3.1 · API DIRECTA</span>
+                <span class="badge">v3.2 · CARGA REAL</span>
             </div>
 
             <div class="info-card">
@@ -379,7 +378,7 @@
                 <div class="info-item">
                     <div class="info-icon"><i class="fas fa-clock"></i></div>
                     <div class="info-content">
-                        <div class="info-label">Respuesta</div>
+                        <div class="info-label">Tiempo</div>
                         <div class="info-value" id="tiempoRespuesta">-</div>
                     </div>
                 </div>
@@ -390,7 +389,7 @@
                     <i class="fas fa-building" style="color: #3b82f6;"></i> Empresa
                 </div>
                 <select id="filtroEmpresa" onchange="aplicarFiltros()">
-                    <option value="">Todas las empresas</option>
+                    <option value="">Cargando empresas...</option>
                 </select>
             </div>
 
@@ -399,7 +398,7 @@
                     <i class="fas fa-city" style="color: #3b82f6;"></i> Proyecto
                 </div>
                 <select id="filtroProyecto" onchange="aplicarFiltros()">
-                    <option value="">Todos los proyectos</option>
+                    <option value="">Cargando proyectos...</option>
                 </select>
             </div>
 
@@ -408,7 +407,7 @@
                     <i class="fas fa-layer-group" style="color: #3b82f6;"></i> Agrupación
                 </div>
                 <select id="filtroAgrupacion" onchange="aplicarFiltros()">
-                    <option value="">Todas las agrupaciones</option>
+                    <option value="">Cargando agrupaciones...</option>
                 </select>
             </div>
 
@@ -416,7 +415,7 @@
                 <i class="fas fa-sync-alt"></i> Recargar Datos
             </button>
 
-            <button class="btn btn-secondary" onclick="window.open('https://script.google.com/macros/s/AKfycbwSiws2mjXlCniHFa7c-GDOFgmMNoGxIsxQ0XKzFNO1XsRM15BqTw2xv9sekNt_BHJmhg/exec?path=datos', '_blank')">
+            <button class="btn btn-secondary" onclick="window.open('https://script.google.com/macros/s/AKfycbwSiws2mjXlCniHFa7c-GDOFgmMNoGxIsxQ0XKzFNO1XsRM15BqTw2xv9sekNt_BHJmhg/exec?path=datos&limit=5', '_blank')">
                 <i class="fas fa-eye"></i> Ver API
             </button>
         </div>
@@ -425,7 +424,7 @@
         <div class="panel-der">
             <div class="stats-bar">
                 <div class="stats-info" id="statsInfo">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                    <i class="fas fa-spinner fa-spin"></i> Inicializando...
                 </div>
                 <div class="stats-info">
                     <i class="fas fa-sitemap"></i> Empresa → Proyecto → Agrupación → Apto → Comprador
@@ -439,6 +438,7 @@
                 <div class="loading">
                     <i class="fas fa-cloud-download-alt fa-spin"></i>
                     <p>Cargando datos desde API...</p>
+                    <p style="font-size: 12px; margin-top: 10px;">Esperando respuesta del servidor</p>
                 </div>
             </div>
         </div>
@@ -451,31 +451,96 @@
         // Variables globales
         let datosOriginales = [];
         let datosFiltrados = [];
-        let filtrosCache = null;
         let timeoutBusqueda;
 
         // ===== INICIALIZACIÓN =====
         document.addEventListener('DOMContentLoaded', () => {
-            cargarFiltros();
+            console.log('🚀 Iniciando CONCIL-IA...');
             cargarDatos();
         });
 
-        // ===== CARGAR FILTROS =====
-        async function cargarFiltros() {
+        // ===== CARGAR DATOS PRINCIPALES =====
+        async function cargarDatos(forceRefresh = false) {
+            const startTime = performance.now();
+            const statsInfo = document.getElementById('statsInfo');
+            const apiStatus = document.getElementById('apiStatus');
+            const tiempoRespuesta = document.getElementById('tiempoRespuesta');
+            const tablaContainer = document.getElementById('tablaContainer');
+
             try {
-                const response = await fetch(`${API_URL}?path=filtros&_=${Date.now()}`);
-                const data = await response.json();
-                
-                if (data.success && data.filtros) {
-                    filtrosCache = data.filtros;
-                    actualizarSelectores(data.filtros);
+                statsInfo.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando con API...';
+                apiStatus.innerHTML = '<span style="color: #f59e0b;">⏳ Conectando...</span>';
+
+                // Hacer la petición
+                console.log('📡 Consultando API:', API_URL + '?path=datos');
+                const response = await fetch(API_URL + '?path=datos', {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+
+                const data = await response.json();
+                console.log('✅ Datos recibidos:', data);
+
+                const elapsed = Math.round(performance.now() - startTime);
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Error en la API');
+                }
+
+                // Guardar datos
+                datosOriginales = data.datos || [];
+                datosFiltrados = datosOriginales;
+
+                // Actualizar UI
+                apiStatus.innerHTML = '<span style="color: #10b981;">✅ Conectado</span>';
+                document.getElementById('totalRegistros').innerHTML = data.total || datosOriginales.length;
+                tiempoRespuesta.innerHTML = `${data.tiempo || 0}ms (${elapsed}ms)`;
+                statsInfo.innerHTML = `<i class="fas fa-database"></i> ${datosOriginales.length} registros`;
+
+                // Cargar filtros después de tener datos
+                cargarFiltrosDesdeDatos();
+                
+                // Renderizar tabla
+                renderizarTabla();
+
             } catch (error) {
-                console.error('Error filtros:', error);
+                console.error('❌ Error:', error);
+                apiStatus.innerHTML = '<span style="color: #ef4444;">❌ Error</span>';
+                statsInfo.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
+                tablaContainer.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle" style="font-size: 48px; margin-bottom: 20px;"></i>
+                        <h3 style="margin-bottom: 10px;">Error al cargar datos</h3>
+                        <p>${error.message}</p>
+                        <p style="font-size: 12px; margin-top: 20px; color: #64748b;">
+                            URL: ${API_URL}<br>
+                            Verificá que la API esté publicada y accesible
+                        </p>
+                        <button onclick="cargarDatos(true)" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 10px; cursor: pointer;">
+                            <i class="fas fa-sync-alt"></i> Reintentar
+                        </button>
+                    </div>
+                `;
             }
         }
 
-        function actualizarSelectores(filtros) {
+        // ===== CARGAR FILTROS DESDE LOS DATOS =====
+        function cargarFiltrosDesdeDatos() {
+            if (!datosOriginales.length) return;
+
+            // Extraer valores únicos
+            const empresas = [...new Set(datosOriginales.map(d => d.empresa).filter(Boolean))].sort();
+            const proyectos = [...new Set(datosOriginales.map(d => d.proyecto).filter(Boolean))].sort();
+            const agrupaciones = [...new Set(datosOriginales.map(d => d.agrupacion).filter(Boolean))].sort();
+
+            // Actualizar selects
             const selectEmpresa = document.getElementById('filtroEmpresa');
             const selectProyecto = document.getElementById('filtroProyecto');
             const selectAgrupacion = document.getElementById('filtroAgrupacion');
@@ -484,69 +549,20 @@
             selectProyecto.innerHTML = '<option value="">Todos los proyectos</option>';
             selectAgrupacion.innerHTML = '<option value="">Todas las agrupaciones</option>';
 
-            if (filtros.empresas?.length) {
-                filtros.empresas.forEach(emp => {
-                    selectEmpresa.innerHTML += `<option value="${emp.replace(/"/g, '&quot;')}">${emp}</option>`;
-                });
-            }
-            if (filtros.proyectos?.length) {
-                filtros.proyectos.forEach(pro => {
-                    selectProyecto.innerHTML += `<option value="${pro.replace(/"/g, '&quot;')}">${pro}</option>`;
-                });
-            }
-            if (filtros.agrupaciones?.length) {
-                filtros.agrupaciones.forEach(agr => {
-                    selectAgrupacion.innerHTML += `<option value="${agr.replace(/"/g, '&quot;')}">${agr}</option>`;
-                });
-            }
+            empresas.forEach(emp => {
+                selectEmpresa.innerHTML += `<option value="${emp.replace(/"/g, '&quot;')}">${emp}</option>`;
+            });
+
+            proyectos.forEach(pro => {
+                selectProyecto.innerHTML += `<option value="${pro.replace(/"/g, '&quot;')}">${pro}</option>`;
+            });
+
+            agrupaciones.forEach(agr => {
+                selectAgrupacion.innerHTML += `<option value="${agr.replace(/"/g, '&quot;')}">${agr}</option>`;
+            });
         }
 
-        // ===== CARGAR DATOS =====
-        async function cargarDatos(forceRefresh = false) {
-            const startTime = performance.now();
-            const statsInfo = document.getElementById('statsInfo');
-            const apiStatus = document.getElementById('apiStatus');
-            const tiempoRespuesta = document.getElementById('tiempoRespuesta');
-
-            try {
-                statsInfo.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando API...';
-                apiStatus.innerHTML = '<span style="color: #f59e0b;">⏳ Consultando...</span>';
-
-                const url = forceRefresh ? `${API_URL}?path=datos&force=true&_=${Date.now()}` : `${API_URL}?path=datos&_=${Date.now()}`;
-                const response = await fetch(url);
-                const data = await response.json();
-
-                const elapsed = Math.round(performance.now() - startTime);
-
-                if (!data.success) {
-                    throw new Error(data.error || 'Error desconocido');
-                }
-
-                datosOriginales = data.datos || [];
-                datosFiltrados = datosOriginales;
-
-                apiStatus.innerHTML = '<span style="color: #10b981;">✅ Conectado</span>';
-                document.getElementById('totalRegistros').innerHTML = data.total || datosOriginales.length;
-                tiempoRespuesta.innerHTML = `${data.tiempo || 0}ms (${elapsed}ms)`;
-                statsInfo.innerHTML = `<i class="fas fa-database"></i> ${datosOriginales.length} registros`;
-
-                renderizarTabla();
-
-            } catch (error) {
-                console.error('Error:', error);
-                apiStatus.innerHTML = '<span style="color: #ef4444;">❌ Error</span>';
-                statsInfo.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
-                document.getElementById('tablaContainer').innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-exclamation-circle" style="font-size: 32px; margin-bottom: 15px;"></i>
-                        <p>${error.message}</p>
-                        <p style="font-size: 12px; margin-top: 15px;">Verificá que la API esté publicada</p>
-                    </div>
-                `;
-            }
-        }
-
-        // ===== FILTROS =====
+        // ===== APLICAR FILTROS =====
         function aplicarFiltros() {
             const empresa = document.getElementById('filtroEmpresa').value;
             const proyecto = document.getElementById('filtroProyecto').value;
@@ -575,9 +591,13 @@
                     datosFiltrados = [...datosOriginales];
                 } else {
                     datosFiltrados = datosOriginales.filter(d => 
-                        Object.values(d).some(val => 
-                            String(val).toLowerCase().includes(texto)
-                        )
+                        (d.empresa || '').toLowerCase().includes(texto) ||
+                        (d.proyecto || '').toLowerCase().includes(texto) ||
+                        (d.agrupacion || '').toLowerCase().includes(texto) ||
+                        (d.apto || '').toLowerCase().includes(texto) ||
+                        (d.comprador || '').toLowerCase().includes(texto) ||
+                        (d.identificacion || '').toLowerCase().includes(texto) ||
+                        (d.tipo || '').toLowerCase().includes(texto)
                     );
                 }
                 
@@ -616,7 +636,8 @@
                     <tbody>
             `;
 
-            const mostrar = datosFiltrados.slice(0, 1000);
+            // Mostrar primeros 500 para rendimiento
+            const mostrar = datosFiltrados.slice(0, 500);
             
             mostrar.forEach(d => {
                 html += `
@@ -635,14 +656,19 @@
                 `;
             });
 
-            if (datosFiltrados.length > 1000) {
+            if (datosFiltrados.length > 500) {
                 html += `<tr><td colspan="10" style="text-align: center; background: #f1f5f9; padding: 15px;">
-                    <i class="fas fa-info-circle"></i> Mostrando 1000 de ${datosFiltrados.length} registros
+                    <i class="fas fa-info-circle"></i> Mostrando 500 de ${datosFiltrados.length} registros
                 </td></tr>`;
             }
 
             html += '</tbody></table>';
             container.innerHTML = html;
+        }
+
+        // ===== UTILIDADES =====
+        function verEnAPI() {
+            window.open(API_URL + '?path=datos&limit=10', '_blank');
         }
     </script>
 </body>
